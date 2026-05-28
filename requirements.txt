@@ -1,0 +1,5 @@
+numpy
+requests
+google-genai
+fastapi
+uvicorn
