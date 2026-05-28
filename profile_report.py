@@ -25,6 +25,9 @@ import argparse
 
 import google.generativeai as genai
 
+from env_loader import load_env, generate_with_retry
+load_env()
+
 
 # Default account to analyze when no username is passed on the command line.
 DEFAULT_USERNAME = "spez"
@@ -34,11 +37,11 @@ DEFAULT_USERNAME = "spez"
 OUTPUT_DIR = os.path.join(os.path.expanduser("~"), "Desktop", "hakaton")
 
 # Hard-coded fallback key (you said it was OK to embed it). Prefer env var.
-DEFAULT_API_KEY = "AIzaSyBvXR-W9nLHAcgkI76rsl39FiMxVCGqmyI"
+DEFAULT_API_KEY = ""  # set GEMINI_API_KEY in .env instead of hard-coding a key
 
 # Gemini model to use. 2.5-flash is fast and reliable on the free tier; switch
 # to "gemini-2.5-pro" for stronger reasoning (subject to higher quota limits).
-MODEL_NAME = "gemini-2.5-flash"
+MODEL_NAME = "gemini-2.5-flash-lite"
 
 
 # ---------------------------------------------------------------------------
@@ -153,7 +156,8 @@ def generate_osint_profile(reddit_data: dict) -> dict:
     payload = json.dumps(trim_for_prompt(reddit_data), ensure_ascii=False, indent=2)
     prompt = SYSTEM_PROMPT + "\n\n" + payload
 
-    response = model.generate_content(
+    response = generate_with_retry(
+        model,
         prompt,
         generation_config={
             "temperature": 0.2,             # keep it analytical, not creative
@@ -176,6 +180,14 @@ def generate_osint_profile(reddit_data: dict) -> dict:
 # CLI
 # ---------------------------------------------------------------------------
 def main() -> None:
+    # The Windows console codec can't encode emoji / em-dashes in quoted Reddit
+    # text, which would crash the preview print. Force UTF-8 with replacement.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
     parser = argparse.ArgumentParser(
         description="Generate an OSINT-style profile from a Reddit history JSON."
     )
